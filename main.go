@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Ant struct {
@@ -23,7 +23,7 @@ func main() {
 	path := BFS(g.Start, g.End, g)
 	paths = append(paths, path[1:])
 	for len(path) > 0 {
-		g = rebuildGraph(g, path[1])
+		g = rebuildGraph(g, path)
 		path = BFS(g.Start, g.End, g)
 		if len(path) != 0 {
 			paths = append(paths, path[1:])
@@ -53,52 +53,65 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 	}
 
 	finished := 0
-	file, _ := os.Create("result.txt")
-	defer file.Close()
-	writer := bufio.NewWriter(file)
-	defer writer.Flush()
 
 	// Simulation loop, runs till all the ants have finished the course
 	for finished < totalAnts {
 		// Track movements for this turn
 		moves := make(map[string]int) // room -> antID
+		movementsMade := false
+		roundMoves := []string{} // Collect all moves for this round
+
 		// Move each ant
 		for _, ant := range ants {
 			if ant.Finished {
 				continue
 			}
+
 			// Check if ant should start moving
 			if ant.Position < 0 {
 				ant.Position++
+				movementsMade = true
 				continue
 			}
+
 			// Check if ant has reached the end
 			if ant.Position >= len(ant.Path) {
 				ant.Finished = true
 				finished++
+				roundMoves = append(roundMoves, fmt.Sprintf("L%d-%s", ant.ID, end))
 				continue
 			}
-			// Get current room
-			// currentRoom := ant.Path[ant.Position]
+
 			// Check if next room is available
 			if ant.Position < len(ant.Path) {
 				nextRoom := ant.Path[ant.Position]
-				if _, occupied := moves[nextRoom]; !occupied {
+				if _, occupied := moves[nextRoom]; !occupied && nextRoom != end {
 					ant.Position++
 					moves[nextRoom] = ant.ID
-					fmt.Printf("L%d-%s ", ant.ID, nextRoom)
-					fmt.Fprintf(writer, "L%d-%s ", ant.ID, nextRoom)
+					movementsMade = true
+					roundMoves = append(roundMoves, fmt.Sprintf("L%d-%s", ant.ID, nextRoom))
+				} else if nextRoom == end {
+					// If next room is the end, multiple ants can occupy it
+					ant.Position++
+					ant.Finished = true
+					finished++
+					roundMoves = append(roundMoves, fmt.Sprintf("L%d-%s", ant.ID, end))
 				}
-			} else {
-				// Ant has reached the end
-				ant.Finished = true
-				finished++
-				fmt.Printf("L%d-%s ", ant.ID, end)
-				fmt.Fprintf(writer, "L%d-%s ", ant.ID, end)
 			}
 		}
-		fmt.Println()
-		fmt.Fprintf(writer, "\n")
+
+		// Print all moves for this round
+		if len(roundMoves) > 0 {
+			fmt.Println(strings.Join(roundMoves, " "))
+		} else if movementsMade {
+			fmt.Println()
+		}
+
+		// If no movements were made, but not all ants are finished,
+		// we have a deadlock - break the loop
+		if !movementsMade && finished < totalAnts {
+			break
+		}
 	}
 }
 
@@ -118,6 +131,7 @@ func antDistribution(ants int, paths *[][]string) []int {
 		// To find the shortest path
 		for i, path := range pathLengths {
 			if path < shortestPath {
+				shortestPath = path
 				index = i
 			}
 		}
@@ -134,21 +148,55 @@ func antDistribution(ants int, paths *[][]string) []int {
 	return antsPerPath
 }
 
-func rebuildGraph(graph *AntFarm, nodeToRemove string) *AntFarm {
-	// Delete references to this node from all other nodes
-	for _, room := range graph.Rooms {
-		newLinks := []string{}
-		for _, link := range room.Links {
-			if link != nodeToRemove {
-				newLinks = append(newLinks, link)
+func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
+	newGraph := copyGraph(graph)
+
+	// Remove all internal nodes in the path, exclude start and end nodes
+	for i := 1; i < len(pathToRemove)-1; i++ {
+		nodeToRemove := pathToRemove[i]
+
+		// First, remove all links to this node from other rooms
+		for roomName, room := range newGraph.Rooms {
+			if roomName != nodeToRemove {
+				// Filter out links to the node being removed
+				newLinks := []string{}
+				for _, link := range room.Links {
+					if link != nodeToRemove {
+						newLinks = append(newLinks, link)
+					}
+				}
+				room.Links = newLinks
+				newGraph.Rooms[roomName] = room
 			}
 		}
-		room.Links = newLinks
+
+		// Then delete the node itself
+		delete(newGraph.Rooms, nodeToRemove)
 	}
 
-	// Now delete the node itself
-	delete(graph.Rooms, nodeToRemove)
-	return graph
+	return newGraph
+}
+
+func copyGraph(graph *AntFarm) *AntFarm {
+	newGraph := &AntFarm{
+		Start: graph.Start,
+		End:   graph.End,
+		Ants:  graph.Ants,
+		Rooms: make(map[string]*Room),
+	}
+
+	// Copy all rooms and their links
+	for name, room := range graph.Rooms {
+		newLinks := make([]string, len(room.Links))
+		copy(newLinks, room.Links)
+
+		newGraph.Rooms[name] = &Room{
+			Name:  room.Name,
+			Links: newLinks,
+		}
+	}
+
+	return newGraph
 }
 
 func BFS(start, end string, graph *AntFarm) []string {
