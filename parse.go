@@ -11,6 +11,7 @@ import (
 type Room struct {
 	Name  string
 	Links []string
+	Used  bool
 }
 
 type AntFarm struct {

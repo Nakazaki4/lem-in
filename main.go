@@ -17,22 +17,21 @@ type Ant struct {
 func main() {
 	fileName := os.Args[1]
 	file, _ := os.Open(fileName)
-	g := ParseFile(file)
-	ants := g.Ants
+	graph := ParseFile(file)
+	ants := graph.Ants
 	paths := [][]string{}
-	path := bfs(g.Start, g.End, g)
-	fmt.Println(path)
+	path := dfs(graph.Start, graph.End, graph)
 	paths = append(paths, path[1:])
 	for len(path) > 0 {
-		g = rebuildGraph(g, path)
-		fmt.Println(path)
-		path = bfs(g.Start, g.End, g)
+		graph = rebuildGraph(graph, path)
+		path = dfs(graph.Start, graph.End, graph)
 		if len(path) != 0 {
 			paths = append(paths, path[1:])
 		}
 	}
+	fmt.Println(paths)
 	antsPerPath := antDistribution(ants, &paths)
-	movementSimulation(g.End, ants, &antsPerPath, paths)
+	movementSimulation(graph.End, ants, &antsPerPath, paths)
 }
 
 func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) {
@@ -151,15 +150,17 @@ func antDistribution(ants int, paths *[][]string) []int {
 }
 
 func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
+	if len(pathToRemove) == 2 {
+		return removeLink(graph, graph.Start, graph.End)
+	}
+
 	newGraph := copyGraph(graph)
 
 	for i := 1; i < len(pathToRemove)-1; i++ {
 		nodeToRemove := pathToRemove[i]
 
-		// First, remove all links to this node from other rooms
 		for roomName, room := range newGraph.Rooms {
 			if roomName != nodeToRemove {
-				// Filter out links to the node being removed
 				newLinks := []string{}
 				for _, link := range room.Links {
 					if link != nodeToRemove {
@@ -171,8 +172,20 @@ func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 			}
 		}
 
-		// Then delete the node itself
 		delete(newGraph.Rooms, nodeToRemove)
+	}
+
+	// Special handling for start node: don't delete it but remove links to nodes in the path
+	if room, exists := newGraph.Rooms[pathToRemove[0]]; exists && pathToRemove[0] == graph.Start {
+		newLinks := []string{}
+		for _, link := range room.Links {
+			// Keep links that don't point to nodes in the path
+			if link != pathToRemove[1] {
+				newLinks = append(newLinks, link)
+			}
+		}
+		room.Links = newLinks
+		newGraph.Rooms[pathToRemove[0]] = room
 	}
 
 	return newGraph
@@ -200,16 +213,17 @@ func copyGraph(graph *AntFarm) *AntFarm {
 	return newGraph
 }
 
-func bfs(start, end string, graph *AntFarm) []string {
-	queue := NewQueue()
-	queue.Enqueue(start)
+func dfs(start, end string, graph *AntFarm) []string {
+	stack := []string{start}
 
 	visited := make(map[string]bool)
 	visited[start] = true
 	path := make(map[string]string)
 
-	for !queue.IsEmpty() {
-		node, _ := queue.Dequeue()
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
 		neighbors := graph.Rooms[node].Links
 
 		if node == end {
@@ -222,9 +236,11 @@ func bfs(start, end string, graph *AntFarm) []string {
 			return tPath
 		}
 
-		for _, neighbor := range neighbors {
+		for i := len(neighbors) - 1; i >= 0; i-- {
+			neighbor := neighbors[i]
 			if !visited[neighbor] {
-				queue.Enqueue(neighbor)
+				// Push onto the stack
+				stack = append(stack, neighbor)
 				path[neighbor] = node
 				visited[neighbor] = true
 			}
@@ -233,15 +249,29 @@ func bfs(start, end string, graph *AntFarm) []string {
 	return []string{}
 }
 
-func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm{
+func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm {
 	newGraph := copyGraph(graph)
-	
+
 	if room, exists := newGraph.Rooms[fromNode]; exists {
 		newLinks := []string{}
 		for _, link := range room.Links {
-			if link !=toNode{
+			if link != toNode {
 				newLinks = append(newLinks, link)
 			}
 		}
+		room.Links = newLinks
+		newGraph.Rooms[fromNode] = room
 	}
+
+	if room, exists := newGraph.Rooms[toNode]; exists {
+		newLinks := []string{}
+		for _, link := range room.Links {
+			if link != fromNode {
+				newLinks = append(newLinks, link)
+			}
+		}
+		room.Links = newLinks
+		newGraph.Rooms[toNode] = room
+	}
+	return newGraph
 }
