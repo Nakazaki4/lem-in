@@ -239,7 +239,6 @@ func dfs(start, end string, graph *AntFarm) []string {
 		for i := len(neighbors) - 1; i >= 0; i-- {
 			neighbor := neighbors[i]
 			if !visited[neighbor] {
-				// Push onto the stack
 				stack = append(stack, neighbor)
 				path[neighbor] = node
 				visited[neighbor] = true
