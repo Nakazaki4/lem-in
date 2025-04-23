@@ -10,21 +10,23 @@ type Ant struct {
 	ID       int
 	PathID   int
 	Position int
-	Path     []string // The path that this ant is following
+	Path     []string
 	Finished bool
 }
 
 func main() {
 	fileName := os.Args[1]
-	f, _ := os.Open(fileName)
-	g := ParseFile(f)
+	file, _ := os.Open(fileName)
+	g := ParseFile(file)
 	ants := g.Ants
 	paths := [][]string{}
-	path := BFS(g.Start, g.End, g)
+	path := bfs(g.Start, g.End, g)
+	fmt.Println(path)
 	paths = append(paths, path[1:])
 	for len(path) > 0 {
 		g = rebuildGraph(g, path)
-		path = BFS(g.Start, g.End, g)
+		fmt.Println(path)
+		path = bfs(g.Start, g.End, g)
 		if len(path) != 0 {
 			paths = append(paths, path[1:])
 		}
@@ -151,7 +153,6 @@ func antDistribution(ants int, paths *[][]string) []int {
 func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 	newGraph := copyGraph(graph)
 
-	// Remove all internal nodes in the path, exclude start and end nodes
 	for i := 1; i < len(pathToRemove)-1; i++ {
 		nodeToRemove := pathToRemove[i]
 
@@ -199,7 +200,7 @@ func copyGraph(graph *AntFarm) *AntFarm {
 	return newGraph
 }
 
-func BFS(start, end string, graph *AntFarm) []string {
+func bfs(start, end string, graph *AntFarm) []string {
 	queue := NewQueue()
 	queue.Enqueue(start)
 
@@ -230,4 +231,17 @@ func BFS(start, end string, graph *AntFarm) []string {
 		}
 	}
 	return []string{}
+}
+
+func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm{
+	newGraph := copyGraph(graph)
+	
+	if room, exists := newGraph.Rooms[fromNode]; exists {
+		newLinks := []string{}
+		for _, link := range room.Links {
+			if link !=toNode{
+				newLinks = append(newLinks, link)
+			}
+		}
+	}
 }
