@@ -20,15 +20,23 @@ func main() {
 	graph := ParseFile(file)
 	ants := graph.Ants
 	paths := [][]string{}
-	path := dfs(graph.Start, graph.End, graph)
-	paths = append(paths, path[1:])
-	for len(path) > 0 {
-		graph = rebuildGraph(graph, path)
-		path = dfs(graph.Start, graph.End, graph)
-		if len(path) != 0 {
-			paths = append(paths, path[1:])
+
+	// Check if the shortest path (path)
+	if ants >= len(graph.Rooms) {
+		// Use DFS
+	} else {
+		// Use BFS
+		path := bfs(graph.Start, graph.End, graph)
+		paths = append(paths, path[1:])
+		for len(path) > 0 {
+			graph = rebuildGraph(graph, path)
+			path = bfs(graph.Start, graph.End, graph)
+			if len(path) != 0 {
+				paths = append(paths, path[1:])
+			}
 		}
 	}
+
 	fmt.Println(paths)
 	antsPerPath := antDistribution(ants, &paths)
 	movementSimulation(graph.End, ants, &antsPerPath, paths)
@@ -215,16 +223,17 @@ func copyGraph(graph *AntFarm) *AntFarm {
 	return newGraph
 }
 
-func dfs(start, end string, graph *AntFarm) []string {
-	stack := &Stack{}
-	stack.Push(start)
+func bfs(start, end string, graph *AntFarm) []string {
+	queue := NewQueue()
+	queue.Enqueue(start)
 
 	visited := make(map[string]bool)
 	visited[start] = true
+
 	path := make(map[string]string)
 
-	for stack.Size() > 0 {
-		node, _ := stack.Pop()
+	for !queue.IsEmpty() {
+		node, _ := queue.Dequeue()
 
 		if node == end {
 			tPath := []string{end}
@@ -237,16 +246,15 @@ func dfs(start, end string, graph *AntFarm) []string {
 		}
 
 		neighbors := graph.Rooms[node].Links
-
-		for i := len(neighbors) - 1; i >= 0; i-- {
-			neighbor := neighbors[i]
+		for _, neighbor := range neighbors {
 			if !visited[neighbor] {
-				stack.Push(neighbor)
-				path[neighbor] = node
 				visited[neighbor] = true
+				queue.Enqueue(neighbor)
+				path[neighbor] = node
 			}
 		}
 	}
+
 	return []string{}
 }
 
