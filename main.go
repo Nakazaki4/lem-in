@@ -54,9 +54,11 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 	}
 
 	finished := 0
+	counter := 0
 
 	// Simulation loop, runs till all the ants have finished the course
 	for finished < totalAnts {
+		counter++
 		// Track movements for this turn
 		moves := make(map[string]int) // room -> antID
 		movementsMade := false
@@ -103,7 +105,7 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 
 		// Print all moves for this round
 		if len(roundMoves) > 0 {
-			fmt.Println(strings.Join(roundMoves, " "))
+			fmt.Printf("NUMBER: %d %s\n", counter, strings.Join(roundMoves, " "))
 		} else if movementsMade {
 			fmt.Println()
 		}
@@ -176,17 +178,17 @@ func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 	}
 
 	// Special handling for start node: don't delete it but remove links to nodes in the path
-	if room, exists := newGraph.Rooms[pathToRemove[0]]; exists && pathToRemove[0] == graph.Start {
-		newLinks := []string{}
-		for _, link := range room.Links {
-			// Keep links that don't point to nodes in the path
-			if link != pathToRemove[1] {
-				newLinks = append(newLinks, link)
-			}
-		}
-		room.Links = newLinks
-		newGraph.Rooms[pathToRemove[0]] = room
-	}
+	// if room, exists := newGraph.Rooms[pathToRemove[0]]; exists && pathToRemove[0] == graph.Start {
+	// 	newLinks := []string{}
+	// 	for _, link := range room.Links {
+	// 		// Keep links that don't point to nodes in the path
+	// 		if link != pathToRemove[1] {
+	// 			newLinks = append(newLinks, link)
+	// 		}
+	// 	}
+	// 	room.Links = newLinks
+	// 	newGraph.Rooms[pathToRemove[0]] = room
+	// }
 
 	return newGraph
 }
@@ -214,17 +216,15 @@ func copyGraph(graph *AntFarm) *AntFarm {
 }
 
 func dfs(start, end string, graph *AntFarm) []string {
-	stack := []string{start}
+	stack := &Stack{}
+	stack.Push(start)
 
 	visited := make(map[string]bool)
 	visited[start] = true
 	path := make(map[string]string)
 
-	for len(stack) > 0 {
-		node := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
-		neighbors := graph.Rooms[node].Links
+	for stack.Size() > 0 {
+		node, _ := stack.Pop()
 
 		if node == end {
 			tPath := []string{end}
@@ -236,10 +236,12 @@ func dfs(start, end string, graph *AntFarm) []string {
 			return tPath
 		}
 
+		neighbors := graph.Rooms[node].Links
+
 		for i := len(neighbors) - 1; i >= 0; i-- {
 			neighbor := neighbors[i]
 			if !visited[neighbor] {
-				stack = append(stack, neighbor)
+				stack.Push(neighbor)
 				path[neighbor] = node
 				visited[neighbor] = true
 			}
