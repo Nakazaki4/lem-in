@@ -21,12 +21,22 @@ func main() {
 	ants := graph.Ants
 	paths := [][]string{}
 
+	path := bfs(graph.Start, graph.End, graph)
+
 	// Check if the shortest path (path)
-	if ants >= len(graph.Rooms) {
+	if ants >= len(path) {
 		// Use DFS
+		path := dfs(graph.Start, graph.End, graph)
+		paths = append(paths, path[1:])
+		for len(path) > 0 {
+			graph = rebuildGraph(graph, path)
+			path = dfs(graph.Start, graph.End, graph)
+			if len(path) != 0 {
+				paths = append(paths, path[1:])
+			}
+		}
 	} else {
 		// Use BFS
-		path := bfs(graph.Start, graph.End, graph)
 		paths = append(paths, path[1:])
 		for len(path) > 0 {
 			graph = rebuildGraph(graph, path)
@@ -255,6 +265,41 @@ func bfs(start, end string, graph *AntFarm) []string {
 		}
 	}
 
+	return []string{}
+}
+
+func dfs(start, end string, graph *AntFarm) []string {
+	stack := &Stack{}
+	stack.Push(start)
+
+	visited := make(map[string]bool)
+	visited[start] = true
+	path := make(map[string]string)
+
+	for stack.Size() > 0 {
+		node, _ := stack.Pop()
+
+		if node == end {
+			tPath := []string{end}
+			current := end
+			for path[current] != "" {
+				current = path[current]
+				tPath = append([]string{current}, tPath...)
+			}
+			return tPath
+		}
+
+		neighbors := graph.Rooms[node].Links
+
+		for i := len(neighbors) - 1; i >= 0; i-- {
+			neighbor := neighbors[i]
+			if !visited[neighbor] {
+				stack.Push(neighbor)
+				path[neighbor] = node
+				visited[neighbor] = true
+			}
+		}
+	}
 	return []string{}
 }
 
