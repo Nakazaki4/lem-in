@@ -46,13 +46,27 @@ func newApproach(graph *AntFarm) {
 	targetSteps := math.MaxInt16
 	var bestCombo [][]string
 	var bestDistribution []int
-	shortestPathLength := math.MaxInt64
+	shortestPathLength := math.MaxInt16
 	for _, combin := range allCombinations {
 		// Calculate ant distribution for this combination
 		antsPerPath := antDistribution(graph.Ants, &combin)
 
-		// Simulate movement and get steps needed
-		steps := movementSimulation(graph.End, graph.Ants, &antsPerPath, combin)
+		numberOfRooms := 0
+		for _, path := range combin {
+			numberOfRooms += len(path)
+		}
+		steps := (numberOfRooms + graph.Ants) / len(combin)
+		
+
+		// pathLengths := make([]int, len(combin))
+		// for i, path := range combin {
+		// 	pathLengths[i] = len(path)
+		// }
+
+		// // Calculate steps needed
+		// steps := calculateSteps(pathLengths, antsPerPath)
+
+		// steps := movementSimulation(graph.End, graph.Ants, &antsPerPath, combin)
 
 		// Calculate total path length (if this matters for tiebreaking)
 		totalPathLength := 0
@@ -73,10 +87,22 @@ func newApproach(graph *AntFarm) {
 		}
 	}
 
-	fmt.Printf("Best solution takes %d steps\n", targetSteps)
+	fmt.Printf("Best solution takes %d steps\n", targetSteps-1)
 	fmt.Printf("Total path length: %d\n", shortestPathLength)
 	fmt.Printf("Using paths: %v\n", bestCombo)
 	fmt.Printf("With ant distribution: %v\n", bestDistribution)
+}
+
+func calculateSteps(paths [][]string, antsPerPath []int) int {
+    maxSteps := 0
+    for i, path := range paths {
+        // Steps for this path = path length + ants assigned - 1
+        steps := len(path) - 1 + antsPerPath[i]
+        if steps > maxSteps {
+            maxSteps = steps
+        }
+    }
+    return maxSteps
 }
 
 func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentCombo [][]string, allPaths [][]string, allCombinations *[][][]string) {
