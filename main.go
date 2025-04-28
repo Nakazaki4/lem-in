@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 )
@@ -18,23 +19,133 @@ func main() {
 	fileName := os.Args[1]
 	file, _ := os.Open(fileName)
 	graph := ParseFile(file)
-	ants := graph.Ants
-	paths := [][]string{}
-	path := dfs(graph.Start, graph.End, graph)
-	paths = append(paths, path[1:])
-	for len(path) > 0 {
-		graph = rebuildGraph(graph, path)
-		path = dfs(graph.Start, graph.End, graph)
-		if len(path) != 0 {
-			paths = append(paths, path[1:])
-		}
-	}
-	fmt.Println(paths)
-	antsPerPath := antDistribution(ants, &paths)
-	movementSimulation(graph.End, ants, &antsPerPath, paths)
+	newApproach(graph)
 }
 
-func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) {
+func newApproach(graph *AntFarm) {
+	// Get all possible paths first
+	allPaths := getAllPossiblePaths(graph)
+	// This will hold all combinations of compatible paths
+	allCombinations := [][][]string{}
+
+	// Try each path as a starting point
+	for _, path := range allPaths {
+		// Start a new combination with this path
+		combo := [][]string{path[1:]}
+		allCombinations = append(allCombinations, combo)
+
+		// Create a graph with this path removed
+		modifiedGraph := rebuildGraph(copyGraph(graph), path[1:])
+
+		// Find all compatible paths recursively
+		findCompatiblePathsRecursive(modifiedGraph, combo, allPaths, &allCombinations)
+	}
+
+	// Now that we have all possible combinations we have to try to send ants through all possible combinations to get the minimu steps a path will give
+	// This is ditribution
+	targetSteps := math.MaxInt16
+	var bestCombo [][]string
+	var bestDistribution []int
+	shortestPathLength := math.MaxInt64
+	for _, combin := range allCombinations {
+		// Calculate ant distribution for this combination
+		antsPerPath := antDistribution(graph.Ants, &combin)
+
+		// Simulate movement and get steps needed
+		steps := movementSimulation(graph.End, graph.Ants, &antsPerPath, combin)
+
+		// Calculate total path length (if this matters for tiebreaking)
+		totalPathLength := 0
+		for _, path := range combin {
+			totalPathLength += len(path)
+		}
+
+		// First priority: minimize steps
+		if steps < targetSteps {
+			targetSteps = steps
+			bestCombo = combin
+			bestDistribution = antsPerPath
+			shortestPathLength = totalPathLength
+		} else if steps == targetSteps && totalPathLength < shortestPathLength {
+			bestCombo = combin
+			bestDistribution = antsPerPath
+			shortestPathLength = totalPathLength
+		}
+	}
+
+	fmt.Printf("Best solution takes %d steps\n", targetSteps)
+	fmt.Printf("Total path length: %d\n", shortestPathLength)
+	fmt.Printf("Using paths: %v\n", bestCombo)
+	fmt.Printf("With ant distribution: %v\n", bestDistribution)
+}
+
+func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentCombo [][]string, allPaths [][]string, allCombinations *[][][]string) {
+	// Find all possible paths in this modified graph
+	compatiblePaths := getAllPossiblePaths(modifiedGraph)
+
+	// For each compatible path
+	for _, path := range compatiblePaths {
+		// Add this path to our combination
+		newCombo := make([][]string, len(currentCombo))
+		copy(newCombo, currentCombo)
+		newCombo = append(newCombo, path[1:])
+
+		// Add this new combination
+		*allCombinations = append(*allCombinations, newCombo)
+
+		// Further modify the graph and continue recursively
+		newGraph := rebuildGraph(copyGraph(modifiedGraph), path[1:])
+		findCompatiblePathsRecursive(newGraph, newCombo, allPaths, allCombinations)
+	}
+}
+
+func getAllPossiblePaths(graph *AntFarm) [][]string {
+	// Store all discovered paths
+	allPaths := [][]string{}
+
+	// Track visited nodes to avoid cycles
+	visited := make(map[string]bool)
+
+	// Current path being explored
+	currentPath := []string{}
+
+	// Recursive DFS helper function
+	var dfsHelper func(current string, end string)
+
+	dfsHelper = func(current string, end string) {
+		// Mark current node as visited
+		visited[current] = true
+
+		// Add current node to path
+		currentPath = append(currentPath, current)
+
+		// If we reached the end, we found a path
+		if current == end {
+			// Create a copy of the current path to avoid reference issues
+			pathCopy := make([]string, len(currentPath))
+			copy(pathCopy, currentPath)
+			allPaths = append(allPaths, pathCopy)
+		} else {
+			// Try all neighbors
+			for _, neighbor := range graph.Rooms[current].Links {
+				if !visited[neighbor] {
+					dfsHelper(neighbor, end)
+				}
+			}
+		}
+
+		// Backtrack - remove current node from path and mark it as unvisited
+		visited[current] = false
+		currentPath = currentPath[:len(currentPath)-1]
+	}
+
+	// Start DFS from the start node
+	dfsHelper(graph.Start, graph.End)
+
+	return allPaths
+}
+
+func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) int {
 	ants := make([]*Ant, totalAnts)
 	antID := 1
 
@@ -110,12 +221,11 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 			fmt.Println()
 		}
 
-		// If no movements were made, but not all ants are finished,
-		// we have a deadlock - break the loop
 		if !movementsMade && finished < totalAnts {
 			break
 		}
 	}
+	return counter
 }
 
 func antDistribution(ants int, paths *[][]string) []int {
@@ -176,20 +286,6 @@ func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 
 		delete(newGraph.Rooms, nodeToRemove)
 	}
-
-	// Special handling for start node: don't delete it but remove links to nodes in the path
-	// if room, exists := newGraph.Rooms[pathToRemove[0]]; exists && pathToRemove[0] == graph.Start {
-	// 	newLinks := []string{}
-	// 	for _, link := range room.Links {
-	// 		// Keep links that don't point to nodes in the path
-	// 		if link != pathToRemove[1] {
-	// 			newLinks = append(newLinks, link)
-	// 		}
-	// 	}
-	// 	room.Links = newLinks
-	// 	newGraph.Rooms[pathToRemove[0]] = room
-	// }
-
 	return newGraph
 }
 
@@ -213,41 +309,6 @@ func copyGraph(graph *AntFarm) *AntFarm {
 	}
 
 	return newGraph
-}
-
-func dfs(start, end string, graph *AntFarm) []string {
-	stack := &Stack{}
-	stack.Push(start)
-
-	visited := make(map[string]bool)
-	visited[start] = true
-	path := make(map[string]string)
-
-	for stack.Size() > 0 {
-		node, _ := stack.Pop()
-
-		if node == end {
-			tPath := []string{end}
-			current := end
-			for path[current] != "" {
-				current = path[current]
-				tPath = append([]string{current}, tPath...)
-			}
-			return tPath
-		}
-
-		neighbors := graph.Rooms[node].Links
-
-		for i := len(neighbors) - 1; i >= 0; i-- {
-			neighbor := neighbors[i]
-			if !visited[neighbor] {
-				stack.Push(neighbor)
-				path[neighbor] = node
-				visited[neighbor] = true
-			}
-		}
-	}
-	return []string{}
 }
 
 func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm {
