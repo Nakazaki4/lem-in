@@ -14,6 +14,10 @@ type Ant struct {
 	Finished bool
 }
 
+type Solution struct {
+
+}
+
 func main() {
 	fileName := os.Args[1]
 	file, _ := os.Open(fileName)
@@ -89,11 +93,9 @@ func MinSteps(stepTurns map[int][]int) int {
 }
 
 func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentGroup *[][]string, allPaths *[][]string, allCombinations *[][][]string) {
-	// Find all possible paths in this modified graph
-	compatiblePaths := getAllPossiblePathsBfs(modifiedGraph)
+	possiblePaths := getAllPossiblePathsBfs(modifiedGraph)
 
-	// For each compatible path
-	for _, path := range compatiblePaths {
+	for _, path := range possiblePaths {
 		// Add this path to our combination
 		newGroup := make([][]string, len(*currentGroup))
 		copy(newGroup, *currentGroup)
