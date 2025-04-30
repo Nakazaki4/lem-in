@@ -1,33 +1,12 @@
-0 --> [[h n e end]]
-1 --> [[h n e end] [t E a m end]]
-2 --> [[h n m end]]
-3 --> [[t E a m end]]
-4 --> [[t E a m end] [h n e end]]
-5 --> [[t E a m end] [h A c k end]]
-6 --> [[t E a m end] [h A c k end] [0 o n e end]]
-7 --> [[t E a m end] [0 o n e end]]
-8 --> [[t E a m end] [0 o n e end] [h A c k end]]
-9 --> [[t E a m end] [0 o n h A c k end]]
-10 --> [[h A c k end]]
-11 --> [[h A c k end] [t E a m end]]
-12 --> [[h A c k end] [t E a m end] [0 o n e end]]
-13 --> [[h A c k end] [0 o n e end]]
-14 --> [[h A c k end] [0 o n e end] [t E a m end]]
-15 --> [[h A c k end] [0 o n m end]]
-16 --> [[h A c k end] [t E a m n e end]]
-17 --> [[0 o n e end]]
-18 --> [[0 o n e end] [t E a m end]]
-19 --> [[0 o n e end] [t E a m end] [h A c k end]]
-20 --> [[0 o n e end] [h A c k end]]
-21 --> [[0 o n e end] [h A c k end] [t E a m end]]
-22 --> [[0 o n m end]]
-23 --> [[0 o n m end] [h A c k end]]
-24 --> [[t E a m n e end]]
-25 --> [[t E a m n e end] [h A c k end]]
-26 --> [[0 o n h A c k end]]
-27 --> [[0 o n h A c k end] [t E a m end]]
-28 --> [[t E a m n h A c k end]]
-Best solution takes 5 turns
-Total weighted path length: 13
-Using paths: [[t E a m end] [h n e end]]
-With ant distribution: [1 2]
+NUMBER: 1 L1-h L5-t L8-0
+NUMBER: 2 L1-A L2-h L5-E L6-t L8-o L9-0
+NUMBER: 3 L1-c L2-A L3-h L5-a L6-E L7-t L8-n L9-o L10-0
+NUMBER: 4 L1-k L2-c L3-A L4-h L5-m L6-a L7-E L8-e L9-n L10-o
+NUMBER: 5 L1-end L2-k L3-c L4-A L5-end L6-m L7-a L8-end L9-e L10-n
+NUMBER: 6 L2-end L3-k L4-c L6-end L7-m L9-end L10-e
+NUMBER: 7 L3-end L4-k L7-end L10-end
+NUMBER: 8 L4-end
+Best solution takes 8 turns
+Total weighted path length: 50
+Using paths: [[h A c k end] [t E a m end] [0 o n e end]]
+With ant distribution: [4 3 3]

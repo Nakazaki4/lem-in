@@ -39,11 +39,6 @@ func newApproach(graph *AntFarm) {
 		// Find all compatible paths recursively
 		findCompatiblePathsRecursive(modifiedGraph, combo, allPaths, &allCombinations)
 	}
-
-	for i, combin := range allCombinations {
-		fmt.Println(i, "-->", combin)
-	}
-
 	// Map to store evaluation metrics for each combination
 	stepTurns := make(map[int][]int)
 
@@ -76,6 +71,8 @@ func newApproach(graph *AntFarm) {
 
 	// Get metrics for the best combination
 	bestMetrics := stepTurns[bestIndex]
+
+	movementSimulation(graph.End, graph.Ants, &bestDistribution, bestCombo)
 
 	fmt.Printf("Best solution takes %d turns\n", bestMetrics[1])
 	fmt.Printf("Total weighted path length: %d\n", bestMetrics[0])
