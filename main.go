@@ -37,30 +37,26 @@ func newApproach(graph *AntFarm) {
 		modifiedGraph := rebuildGraph(copyGraph(graph), path)
 
 		// Find all compatible paths recursively
-		findCompatiblePathsRecursive(modifiedGraph, combo, allPaths, &allCombinations)
+		findCompatiblePathsRecursive(modifiedGraph, &combo, &allPaths, &allCombinations)
 	}
 	// Map to store evaluation metrics for each combination
 	stepTurns := make(map[int][]int)
 
-	// Now evaluate each combination using BestGroup's approach
 	for i, combin := range allCombinations {
-		// Calculate ant distribution for this combination
 		antsPerPath := antDistribution(graph.Ants, &combin)
 
-		// Calculate the BestGroup metrics
 		// Calculate the turns using the first path's length and ants
 		firstPathLength := len(combin[0])
 		firstPathAnts := antsPerPath[0]
 		// this calculates turns
 		tempT := firstPathLength - 1 + firstPathAnts
 
-		totalSteps := 0 // Total weighted path length
+		totalSteps := 0
 		// this calculates steps
 		for j, path := range combin {
 			totalSteps += antsPerPath[j] * len(path)
 		}
 
-		// Store the metrics for this combination
 		stepTurns[i] = []int{totalSteps, tempT}
 	}
 
@@ -69,15 +65,7 @@ func newApproach(graph *AntFarm) {
 	bestCombo := allCombinations[bestIndex]
 	bestDistribution := antDistribution(graph.Ants, &bestCombo)
 
-	// Get metrics for the best combination
-	bestMetrics := stepTurns[bestIndex]
-
 	movementSimulation(graph.End, graph.Ants, &bestDistribution, bestCombo)
-
-	fmt.Printf("Best solution takes %d turns\n", bestMetrics[1])
-	fmt.Printf("Total weighted path length: %d\n", bestMetrics[0])
-	fmt.Printf("Using paths: %v\n", bestCombo)
-	fmt.Printf("With ant distribution: %v\n", bestDistribution)
 }
 
 // Implementation of MinSteps function
@@ -100,43 +88,47 @@ func MinSteps(stepTurns map[int][]int) int {
 	return index
 }
 
-func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentCombo [][]string, allPaths [][]string, allCombinations *[][][]string) {
+func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentGroup *[][]string, allPaths *[][]string, allCombinations *[][][]string) {
 	// Find all possible paths in this modified graph
 	compatiblePaths := getAllPossiblePathsBfs(modifiedGraph)
 
 	// For each compatible path
 	for _, path := range compatiblePaths {
 		// Add this path to our combination
-		newCombo := make([][]string, len(currentCombo))
-		copy(newCombo, currentCombo)
+		newGroup := make([][]string, len(*currentGroup))
+		copy(newGroup, *currentGroup)
 		// we should check if the path we're about to append doesn't intersect with any paths in the previous combination
 		p := path[:len(path)-1]
-		if !isCompatibleWithComb(&currentCombo, &p) {
+		if !isCompatibleWithComb(currentGroup, &p) {
 			continue
 		}
-		newCombo = append(newCombo, path)
+		newGroup = append(newGroup, path)
 
 		// Add this new combination
-		*allCombinations = append(*allCombinations, newCombo)
+		*allCombinations = append(*allCombinations, newGroup)
 
 		// Further modify the graph and continue recursively
 		newGraph := rebuildGraph(copyGraph(modifiedGraph), path)
-		findCompatiblePathsRecursive(newGraph, newCombo, allPaths, allCombinations)
+		findCompatiblePathsRecursive(newGraph, &newGroup, allPaths, allCombinations)
 	}
 }
 
 func isCompatibleWithComb(combination *[][]string, pathToAppend *[]string) bool {
-	nodeSet := make(map[string]struct{})
+	roomSet := make(map[string]struct{})
 	for _, path := range *combination {
-		for _, node := range path {
-			nodeSet[node] = struct{}{}
+		for _, room := range path {
+			roomSet[room] = struct{}{}
 		}
 	}
 
 	for _, node := range *pathToAppend {
-		if _, exists := nodeSet[node]; exists {
+		if _, exists := roomSet[node]; exists {
 			return false
 		}
+	}
+
+	for n := range roomSet {
+		delete(roomSet, n)
 	}
 	return true
 }
@@ -247,7 +239,7 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 
 		// Print all moves for this round
 		if len(roundMoves) > 0 {
-			fmt.Printf("NUMBER: %d %s\n", counter, strings.Join(roundMoves, " "))
+			fmt.Printf("%d:  %s\n", counter, strings.Join(roundMoves, " "))
 		} else if movementsMade {
 			fmt.Println()
 		}
