@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -25,150 +25,147 @@ func main() {
 func newApproach(graph *AntFarm) {
 	// Get all possible paths first
 	allPaths := getAllPossiblePaths(graph)
+
+	
+	for allPaths >  {
+
+	}
 	// This will hold all combinations of compatible paths
 	allCombinations := [][][]string{}
 
 	// Try each path as a starting point
 	for _, path := range allPaths {
 		// Start a new combination with this path
-		combo := [][]string{path[1:]}
+		combo := [][]string{path}
 		allCombinations = append(allCombinations, combo)
 
 		// Create a graph with this path removed
-		modifiedGraph := rebuildGraph(copyGraph(graph), path[1:])
+		modifiedGraph := rebuildGraph(copyGraph(graph), path)
 
 		// Find all compatible paths recursively
 		findCompatiblePathsRecursive(modifiedGraph, combo, allPaths, &allCombinations)
 	}
 
-	// Now that we have all possible combinations we have to try to send ants through all possible combinations to get the minimu steps a path will give
-	// This is ditribution
-	targetSteps := math.MaxInt16
-	var bestCombo [][]string
-	var bestDistribution []int
-	shortestPathLength := math.MaxInt16
-	for _, combin := range allCombinations {
+	for i, combin := range allCombinations {
+		fmt.Println(i, "-->", combin)
+	}
+
+	// Map to store evaluation metrics for each combination
+	stepTurns := make(map[int][]int)
+
+	// Now evaluate each combination using BestGroup's approach
+	for i, combin := range allCombinations {
 		// Calculate ant distribution for this combination
 		antsPerPath := antDistribution(graph.Ants, &combin)
 
-		numberOfRooms := 0
-		for _, path := range combin {
-			numberOfRooms += len(path)
-		}
-		steps := (numberOfRooms + graph.Ants) / len(combin)
-		
+		// Calculate the BestGroup metrics
+		// Calculate the turns using the first path's length and ants
+		firstPathLength := len(combin[0])
+		firstPathAnts := antsPerPath[0]
+		// this calculates turns
+		tempT := firstPathLength - 1 + firstPathAnts
 
-		// pathLengths := make([]int, len(combin))
-		// for i, path := range combin {
-		// 	pathLengths[i] = len(path)
-		// }
-
-		// // Calculate steps needed
-		// steps := calculateSteps(pathLengths, antsPerPath)
-
-		// steps := movementSimulation(graph.End, graph.Ants, &antsPerPath, combin)
-
-		// Calculate total path length (if this matters for tiebreaking)
-		totalPathLength := 0
-		for _, path := range combin {
-			totalPathLength += len(path)
+		totalSteps := 0 // Total weighted path length
+		// this calculates steps
+		for j, path := range combin {
+			totalSteps += antsPerPath[j] * len(path)
 		}
 
-		// First priority: minimize steps
-		if steps < targetSteps {
-			targetSteps = steps
-			bestCombo = combin
-			bestDistribution = antsPerPath
-			shortestPathLength = totalPathLength
-		} else if steps == targetSteps && totalPathLength < shortestPathLength {
-			bestCombo = combin
-			bestDistribution = antsPerPath
-			shortestPathLength = totalPathLength
-		}
+		// Store the metrics for this combination
+		stepTurns[i] = []int{totalSteps, tempT}
 	}
 
-	fmt.Printf("Best solution takes %d steps\n", targetSteps-1)
-	fmt.Printf("Total path length: %d\n", shortestPathLength)
+	// Find the best combination using MinSteps
+	bestIndex := MinSteps(stepTurns)
+	bestCombo := allCombinations[bestIndex]
+	bestDistribution := antDistribution(graph.Ants, &bestCombo)
+
+	// Get metrics for the best combination
+	bestMetrics := stepTurns[bestIndex]
+
+	fmt.Printf("Best solution takes %d turns\n", bestMetrics[1])
+	fmt.Printf("Total weighted path length: %d\n", bestMetrics[0])
 	fmt.Printf("Using paths: %v\n", bestCombo)
 	fmt.Printf("With ant distribution: %v\n", bestDistribution)
 }
 
-func calculateSteps(paths [][]string, antsPerPath []int) int {
-    maxSteps := 0
-    for i, path := range paths {
-        // Steps for this path = path length + ants assigned - 1
-        steps := len(path) - 1 + antsPerPath[i]
-        if steps > maxSteps {
-            maxSteps = steps
-        }
-    }
-    return maxSteps
+// Implementation of MinSteps function
+func MinSteps(stepTurns map[int][]int) int {
+	first := true
+	minSteps, minTurns := 0, 0
+	var index int
+	for i, turns := range stepTurns {
+		if first {
+			minSteps = turns[0]
+			minTurns = turns[1]
+			first = false
+			index = i
+		} else if turns[1] < minTurns || (turns[1] == minTurns && turns[0] < minSteps) {
+			minSteps = turns[0]
+			minTurns = turns[1]
+			index = i
+		}
+	}
+	return index
 }
 
 func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentCombo [][]string, allPaths [][]string, allCombinations *[][][]string) {
-	// Find all possible paths in this modified graph
 	compatiblePaths := getAllPossiblePaths(modifiedGraph)
 
-	// For each compatible path
 	for _, path := range compatiblePaths {
-		// Add this path to our combination
 		newCombo := make([][]string, len(currentCombo))
 		copy(newCombo, currentCombo)
-		newCombo = append(newCombo, path[1:])
+		// we should check if the path we're about to append doesn't intersect with any paths in the previous combination
+		path = path[:len(path)-1]
+		if !isCompatibleWithComb(&currentCombo, &path) {
+			continue
+		}
+		newCombo = append(newCombo, path)
 
 		// Add this new combination
 		*allCombinations = append(*allCombinations, newCombo)
 
 		// Further modify the graph and continue recursively
-		newGraph := rebuildGraph(copyGraph(modifiedGraph), path[1:])
+		newGraph := rebuildGraph(copyGraph(modifiedGraph), path)
 		findCompatiblePathsRecursive(newGraph, newCombo, allPaths, allCombinations)
 	}
 }
 
-func getAllPossiblePaths(graph *AntFarm) [][]string {
-	// Store all discovered paths
-	allPaths := [][]string{}
-
-	// Track visited nodes to avoid cycles
-	visited := make(map[string]bool)
-
-	// Current path being explored
-	currentPath := []string{}
-
-	// Recursive DFS helper function
-	var dfsHelper func(current string, end string)
-
-	dfsHelper = func(current string, end string) {
-		// Mark current node as visited
-		visited[current] = true
-
-		// Add current node to path
-		currentPath = append(currentPath, current)
-
-		// If we reached the end, we found a path
-		if current == end {
-			// Create a copy of the current path to avoid reference issues
-			pathCopy := make([]string, len(currentPath))
-			copy(pathCopy, currentPath)
-			allPaths = append(allPaths, pathCopy)
-		} else {
-			// Try all neighbors
-			for _, neighbor := range graph.Rooms[current].Links {
-				if !visited[neighbor] {
-					dfsHelper(neighbor, end)
-				}
+func isCompatibleWithComb(combination *[][]string, pathToAppend *[]string) bool {
+	for _, path := range *combination {
+		for i := range path {
+			if slices.Contains(*pathToAppend, path[i]) {
+				return false
 			}
 		}
+	}
+	return true
+}
 
-		// Backtrack - remove current node from path and mark it as unvisited
-		visited[current] = false
-		currentPath = currentPath[:len(currentPath)-1]
+func getAllPossiblePaths(graph *AntFarm) [][]string {
+	var paths [][]string
+	var dfs func(path []string, visited map[string]bool)
+
+	dfs = func(path []string, visited map[string]bool) {
+		current := path[len(path)-1]
+		if current == graph.End {
+			paths = append(paths, path[1:])
+			return
+		}
+
+		for _, neighbor := range graph.Rooms[current].Links {
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				dfs(append(path, neighbor), visited)
+				visited[neighbor] = false // Backtrack
+			}
+		}
 	}
 
-	// Start DFS from the start node
-	dfsHelper(graph.Start, graph.End)
-
-	return allPaths
+	visited := make(map[string]bool)
+	visited[graph.Start] = true
+	dfs([]string{graph.Start}, visited)
+	return paths
 }
 
 func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) int {
@@ -288,7 +285,7 @@ func antDistribution(ants int, paths *[][]string) []int {
 }
 
 func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
-	if len(pathToRemove) == 2 {
+	if len(pathToRemove) == 1 {
 		return removeLink(graph, graph.Start, graph.End)
 	}
 
