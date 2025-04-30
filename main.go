@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -24,12 +23,7 @@ func main() {
 
 func newApproach(graph *AntFarm) {
 	// Get all possible paths first
-	allPaths := getAllPossiblePaths(graph)
-
-	
-	for allPaths >  {
-
-	}
+	allPaths := getAllPossiblePathsBfs(graph)
 	// This will hold all combinations of compatible paths
 	allCombinations := [][][]string{}
 
@@ -110,14 +104,17 @@ func MinSteps(stepTurns map[int][]int) int {
 }
 
 func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentCombo [][]string, allPaths [][]string, allCombinations *[][][]string) {
-	compatiblePaths := getAllPossiblePaths(modifiedGraph)
+	// Find all possible paths in this modified graph
+	compatiblePaths := getAllPossiblePathsBfs(modifiedGraph)
 
+	// For each compatible path
 	for _, path := range compatiblePaths {
+		// Add this path to our combination
 		newCombo := make([][]string, len(currentCombo))
 		copy(newCombo, currentCombo)
 		// we should check if the path we're about to append doesn't intersect with any paths in the previous combination
-		path = path[:len(path)-1]
-		if !isCompatibleWithComb(&currentCombo, &path) {
+		p := path[:len(path)-1]
+		if !isCompatibleWithComb(&currentCombo, &p) {
 			continue
 		}
 		newCombo = append(newCombo, path)
@@ -132,39 +129,53 @@ func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentCombo [][]strin
 }
 
 func isCompatibleWithComb(combination *[][]string, pathToAppend *[]string) bool {
+	nodeSet := make(map[string]struct{})
 	for _, path := range *combination {
-		for i := range path {
-			if slices.Contains(*pathToAppend, path[i]) {
-				return false
-			}
+		for _, node := range path {
+			nodeSet[node] = struct{}{}
+		}
+	}
+
+	for _, node := range *pathToAppend {
+		if _, exists := nodeSet[node]; exists {
+			return false
 		}
 	}
 	return true
 }
 
-func getAllPossiblePaths(graph *AntFarm) [][]string {
+func getAllPossiblePathsBfs(graph *AntFarm) [][]string {
 	var paths [][]string
-	var dfs func(path []string, visited map[string]bool)
+	queue := Queue{}
+	queue.Enqueue([]string{graph.Start})
 
-	dfs = func(path []string, visited map[string]bool) {
+	for !queue.IsEmpty() {
+		path := queue.Dequeue()
 		current := path[len(path)-1]
 		if current == graph.End {
 			paths = append(paths, path[1:])
-			return
+			continue
+		}
+
+		visited := make(map[string]bool)
+		for _, room := range path {
+			visited[room] = true
 		}
 
 		for _, neighbor := range graph.Rooms[current].Links {
-			if !visited[neighbor] {
-				visited[neighbor] = true
-				dfs(append(path, neighbor), visited)
-				visited[neighbor] = false // Backtrack
+			if visited[neighbor] {
+				continue
 			}
+			visited[neighbor] = true
+
+			newPath := make([]string, len(path))
+			copy(newPath, path)
+			newPath = append(newPath, neighbor)
+
+			// Add to queue
+			queue.Enqueue(newPath)
 		}
 	}
-
-	visited := make(map[string]bool)
-	visited[graph.Start] = true
-	dfs([]string{graph.Start}, visited)
 	return paths
 }
 
@@ -252,35 +263,29 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 }
 
 func antDistribution(ants int, paths *[][]string) []int {
-	// Length of each path
 	pathLengths := make([]int, len(*paths))
-
 	for i, p := range *paths {
 		pathLengths[i] = len(p)
 	}
+
+	antsPerPath := make([]int, len(*paths))
 	resPathLength := make([]int, len(*paths))
 	copy(resPathLength, pathLengths)
 
 	for ants > 0 {
-		shortestPath := pathLengths[0]
 		index := 0
-		// To find the shortest path
+		shortestPath := pathLengths[0]
 		for i, path := range pathLengths {
 			if path < shortestPath {
 				shortestPath = path
 				index = i
 			}
 		}
-		// Assign an ant to the shortest path
+		antsPerPath[index]++
 		pathLengths[index]++
 		ants--
 	}
 
-	// Shows how many ants have been assigned to each path
-	antsPerPath := make([]int, len(*paths))
-	for i, p := range pathLengths {
-		antsPerPath[i] = p - resPathLength[i]
-	}
 	return antsPerPath
 }
 
@@ -317,7 +322,7 @@ func copyGraph(graph *AntFarm) *AntFarm {
 		Start: graph.Start,
 		End:   graph.End,
 		Ants:  graph.Ants,
-		Rooms: make(map[string]*Room),
+		Rooms: make(map[string]*Room, len(graph.Rooms)),
 	}
 
 	// Copy all rooms and their links
