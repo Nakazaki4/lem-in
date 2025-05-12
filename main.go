@@ -41,8 +41,13 @@ func main() {
 
 func newApproach(graph *AntFarm) {
 	// Get all possible paths first
-	allPaths := getAllPossiblePathsBfs(graph)
-	fmt.Println(allPaths)
+	allPaths := make([][]string, 0)
+	for _, neighbor := range graph.Rooms[graph.Start].Links {
+		if neighbor != graph.End {
+			allPaths = append(allPaths, findShortestPath(graph, neighbor, graph.End))
+		}
+	}
+	// allPaths := getAllPossiblePathsBfs(graph)
 	// disjointPaths := findDisjointPaths(allPaths)
 	// fmt.Println(disjointPaths)
 	// This will hold all combinations of compatible paths
@@ -50,7 +55,7 @@ func newApproach(graph *AntFarm) {
 
 	// Try each path as a starting point
 	for _, path := range allPaths {
-		if len(path) != 0 {
+		if len(path) != 0 && len(path) <= graph.Ants {
 
 			// Start a new combination with this path
 			combo := [][]string{path}
@@ -88,6 +93,62 @@ func newApproach(graph *AntFarm) {
 	bestDistribution := antDistribution(graph.Ants, &bestCombo)
 
 	movementSimulation(graph.End, graph.Ants, &bestDistribution, bestCombo)
+}
+
+func findShortestPath(graph *AntFarm, startNode string, endNode string) []string {
+	// Use the graph's end if not specified
+	if endNode == "" {
+		endNode = graph.End
+	}
+
+	// Check if start and end are the same
+	if startNode == endNode {
+		return []string{startNode}
+	}
+
+	// Queue for BFS
+	queue := []string{startNode}
+
+	// Keep track of visited nodes to avoid cycles
+	visited := make(map[string]bool)
+	visited[startNode] = true
+
+	// Store parent of each node to reconstruct the path
+	parent := make(map[string]string)
+
+	// BFS traversal
+	for len(queue) > 0 {
+		// Dequeue the first node
+		current := queue[0]
+		queue = queue[1:]
+
+		// Check if we've reached the end
+		if current == endNode {
+			// Reconstruct the path
+			path := []string{current}
+			for current != startNode {
+				current = parent[current]
+				path = append([]string{current}, path...)
+			}
+			return path
+		}
+
+		// Explore neighbors
+		if room, ok := graph.Rooms[current]; ok {
+			if room.Name != graph.Start {
+				for _, neighbor := range room.Links {
+					if !visited[neighbor] {
+						visited[neighbor] = true
+						parent[neighbor] = current
+						queue = append(queue, neighbor)
+					}
+				}
+			}
+		}
+	}
+
+	// No path found
+	return nil
 }
 
 func findDisjointPaths(allPaths [][]string) [][]string {
@@ -213,12 +274,18 @@ func getAllPossiblePathsBfs(graph *AntFarm) [][]string {
 			visited[room] = true
 		}
 
+		currentRoom, exists := graph.Rooms[current]
+		if !exists || currentRoom == nil {
+			// Skip this path if the room doesn't exist
+			continue
+		}
+
 		for _, neighbor := range graph.Rooms[current].Links {
 			if visited[neighbor] {
 				continue
 			}
+
 			visited[neighbor] = true
-			fmt.Println(neighbor)
 
 			newPath := make([]string, len(path))
 			copy(newPath, path)
@@ -345,6 +412,7 @@ func antDistribution(ants int, paths *[][]string) []int {
 
 func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 	if len(pathToRemove) == 1 {
+		fmt.Println("REMOVE PATH")
 		return removeLink(graph, graph.Start, graph.End)
 	}
 
