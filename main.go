@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -14,8 +16,19 @@ type Ant struct {
 	Finished bool
 }
 
-type Solution struct {
+type BestSolution struct {
+	Turns        int
+	Steps        int
+	Group        [][]string
+	Distribution []int
+}
 
+func printPerformance() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("Alloc = %v KiB", m.Alloc/1024)
+	fmt.Printf("\tTotalAlloc = %v KiB", m.TotalAlloc/1024)
+	fmt.Printf("\tSys = %v KiB\n", m.Sys/1024)
 }
 
 func main() {
@@ -23,27 +36,32 @@ func main() {
 	file, _ := os.Open(fileName)
 	graph := ParseFile(file)
 	newApproach(graph)
+	printPerformance()
 }
 
 func newApproach(graph *AntFarm) {
 	// Get all possible paths first
 	allPaths := getAllPossiblePathsBfs(graph)
+	fmt.Println(allPaths)
+	// disjointPaths := findDisjointPaths(allPaths)
+	// fmt.Println(disjointPaths)
 	// This will hold all combinations of compatible paths
 	allCombinations := [][][]string{}
 
 	// Try each path as a starting point
 	for _, path := range allPaths {
-		// Start a new combination with this path
-		combo := [][]string{path}
-		allCombinations = append(allCombinations, combo)
+		if len(path) != 0 {
 
-		// Create a graph with this path removed
-		modifiedGraph := rebuildGraph(copyGraph(graph), path)
+			// Start a new combination with this path
+			combo := [][]string{path}
+			allCombinations = append(allCombinations, combo)
 
-		// Find all compatible paths recursively
-		findCompatiblePathsRecursive(modifiedGraph, &combo, &allPaths, &allCombinations)
+			newGraph := rebuildGraph(copyGraph(graph), path)
+			// Find all compatible paths recursively
+			findCompatiblePathsRecursive(newGraph, &combo, &allPaths, &allCombinations)
+		}
 	}
-	// Map to store evaluation metrics for each combination
+	// // Map to store evaluation metrics for each combination
 	stepTurns := make(map[int][]int)
 
 	for i, combin := range allCombinations {
@@ -72,6 +90,37 @@ func newApproach(graph *AntFarm) {
 	movementSimulation(graph.End, graph.Ants, &bestDistribution, bestCombo)
 }
 
+func findDisjointPaths(allPaths [][]string) [][]string {
+	// Sort paths by length (shortest first)
+	sort.Slice(allPaths, func(i, j int) bool {
+		return len(allPaths[i]) < len(allPaths[j])
+	})
+
+	selected := make([][]string, 0)
+	usedRooms := make(map[string]bool)
+
+	for _, path := range allPaths {
+		conflict := false
+		// Check intermediate nodes (exclude start and end)
+		for _, room := range path[1 : len(path)-1] {
+			if usedRooms[room] {
+				conflict = true
+				break
+			}
+		}
+
+		if !conflict {
+			// Mark nodes as used
+			for _, node := range path[1 : len(path)-1] {
+				usedRooms[node] = true
+			}
+			selected = append(selected, path)
+		}
+	}
+
+	return selected
+}
+
 // Implementation of MinSteps function
 func MinSteps(stepTurns map[int][]int) int {
 	first := true
@@ -94,20 +143,30 @@ func MinSteps(stepTurns map[int][]int) int {
 
 func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentGroup *[][]string, allPaths *[][]string, allCombinations *[][][]string) {
 	possiblePaths := getAllPossiblePathsBfs(modifiedGraph)
+	if len(possiblePaths) == 0 {
+		return
+	}
 
 	for _, path := range possiblePaths {
+		if len(path) == 0 {
+			continue
+		}
 		// Add this path to our combination
 		newGroup := make([][]string, len(*currentGroup))
 		copy(newGroup, *currentGroup)
+		newGroup = append(newGroup, path)
 		// we should check if the path we're about to append doesn't intersect with any paths in the previous combination
 		p := path[:len(path)-1]
 		if !isCompatibleWithComb(currentGroup, &p) {
 			continue
 		}
-		newGroup = append(newGroup, path)
+		if len(newGroup) > modifiedGraph.Ants {
+			continue
+		}
 
-		// Add this new combination
-		*allCombinations = append(*allCombinations, newGroup)
+		if len(newGroup) > 0 {
+			*allCombinations = append(*allCombinations, newGroup)
+		}
 
 		// Further modify the graph and continue recursively
 		newGraph := rebuildGraph(copyGraph(modifiedGraph), path)
@@ -149,6 +208,7 @@ func getAllPossiblePathsBfs(graph *AntFarm) [][]string {
 		}
 
 		visited := make(map[string]bool)
+
 		for _, room := range path {
 			visited[room] = true
 		}
@@ -158,17 +218,20 @@ func getAllPossiblePathsBfs(graph *AntFarm) [][]string {
 				continue
 			}
 			visited[neighbor] = true
+			fmt.Println(neighbor)
 
 			newPath := make([]string, len(path))
 			copy(newPath, path)
 			newPath = append(newPath, neighbor)
 
-			// Add to queue
 			queue.Enqueue(newPath)
 		}
 	}
 	return paths
 }
+
+// func isJoined(newPath [][]string) bool {
+// }
 
 func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) int {
 	ants := make([]*Ant, totalAnts)
@@ -285,12 +348,10 @@ func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 		return removeLink(graph, graph.Start, graph.End)
 	}
 
-	newGraph := copyGraph(graph)
-
 	for i := 1; i < len(pathToRemove)-1; i++ {
 		nodeToRemove := pathToRemove[i]
 
-		for roomName, room := range newGraph.Rooms {
+		for roomName, room := range graph.Rooms {
 			if roomName != nodeToRemove {
 				newLinks := []string{}
 				for _, link := range room.Links {
@@ -299,13 +360,13 @@ func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 					}
 				}
 				room.Links = newLinks
-				newGraph.Rooms[roomName] = room
+				graph.Rooms[roomName] = room
 			}
 		}
 
-		delete(newGraph.Rooms, nodeToRemove)
+		delete(graph.Rooms, nodeToRemove)
 	}
-	return newGraph
+	return graph
 }
 
 func copyGraph(graph *AntFarm) *AntFarm {
