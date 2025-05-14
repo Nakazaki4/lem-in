@@ -4,24 +4,10 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sort"
 	"strings"
 )
 
-type Ant struct {
-	ID       int
-	PathID   int
-	Position int
-	Path     []string
-	Finished bool
-}
-
-type BestSolution struct {
-	Turns        int
-	Steps        int
-	Group        [][]string
-	Distribution []int
-}
+var isBigFarm bool
 
 func printPerformance() {
 	var m runtime.MemStats
@@ -43,19 +29,21 @@ func newApproach(graph *AntFarm) {
 	// Get all possible paths first
 	allPaths := make([][]string, 0)
 	for _, neighbor := range graph.Rooms[graph.Start].Links {
-		if neighbor != graph.End {
-			allPaths = append(allPaths, findShortestPath(graph, neighbor, graph.End))
-		}
+		allPaths = append(allPaths, findShortestPath(graph, neighbor, graph.End))
 	}
-	// allPaths := getAllPossiblePathsBfs(graph)
-	// disjointPaths := findDisjointPaths(allPaths)
-	// fmt.Println(disjointPaths)
+
+	target := 0
+
+	for range graph.Rooms[graph.End].Links {
+		target++
+	}
+
 	// This will hold all combinations of compatible paths
 	allCombinations := [][][]string{}
 
 	// Try each path as a starting point
 	for _, path := range allPaths {
-		if len(path) != 0 && len(path) <= graph.Ants {
+		if len(path) != 0 {
 
 			// Start a new combination with this path
 			combo := [][]string{path}
@@ -151,37 +139,6 @@ func findShortestPath(graph *AntFarm, startNode string, endNode string) []string
 	return nil
 }
 
-func findDisjointPaths(allPaths [][]string) [][]string {
-	// Sort paths by length (shortest first)
-	sort.Slice(allPaths, func(i, j int) bool {
-		return len(allPaths[i]) < len(allPaths[j])
-	})
-
-	selected := make([][]string, 0)
-	usedRooms := make(map[string]bool)
-
-	for _, path := range allPaths {
-		conflict := false
-		// Check intermediate nodes (exclude start and end)
-		for _, room := range path[1 : len(path)-1] {
-			if usedRooms[room] {
-				conflict = true
-				break
-			}
-		}
-
-		if !conflict {
-			// Mark nodes as used
-			for _, node := range path[1 : len(path)-1] {
-				usedRooms[node] = true
-			}
-			selected = append(selected, path)
-		}
-	}
-
-	return selected
-}
-
 // Implementation of MinSteps function
 func MinSteps(stepTurns map[int][]int) int {
 	first := true
@@ -218,16 +175,10 @@ func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentGroup *[][]stri
 		newGroup = append(newGroup, path)
 		// we should check if the path we're about to append doesn't intersect with any paths in the previous combination
 		p := path[:len(path)-1]
-		if !isCompatibleWithComb(currentGroup, &p) {
+		if !isCompatibleWithComb(currentGroup, &p) || len(newGroup) > modifiedGraph.Ants || len(newGroup) <= 0 {
 			continue
 		}
-		if len(newGroup) > modifiedGraph.Ants {
-			continue
-		}
-
-		if len(newGroup) > 0 {
-			*allCombinations = append(*allCombinations, newGroup)
-		}
+		*allCombinations = append(*allCombinations, newGroup)
 
 		// Further modify the graph and continue recursively
 		newGraph := rebuildGraph(copyGraph(modifiedGraph), path)
@@ -291,14 +242,36 @@ func getAllPossiblePathsBfs(graph *AntFarm) [][]string {
 			copy(newPath, path)
 			newPath = append(newPath, neighbor)
 
-			queue.Enqueue(newPath)
+			
+			// -- Use this for big graphs --
+			hasOverLap := false
+			newRooms := make(map[string]bool)
+			for _, room := range newPath[1:] {
+				newRooms[room] = true
+			}
+
+			for _, existingPath := range queue.elements {
+				for _, room := range existingPath {
+					if newRooms[room] {
+						hasOverLap = true
+						break
+					}
+				}
+				if hasOverLap {
+					break
+				}
+			}
+
+			if !hasOverLap {
+				queue.Enqueue(newPath)
+			}
+
+			// -- Use this for small graphs --
+			// queue.Enqueue(newPath)
 		}
 	}
 	return paths
 }
-
-// func isJoined(newPath [][]string) bool {
-// }
 
 func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) int {
 	ants := make([]*Ant, totalAnts)
@@ -412,7 +385,6 @@ func antDistribution(ants int, paths *[][]string) []int {
 
 func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
 	if len(pathToRemove) == 1 {
-		fmt.Println("REMOVE PATH")
 		return removeLink(graph, graph.Start, graph.End)
 	}
 

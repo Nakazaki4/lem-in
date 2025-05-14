@@ -8,19 +8,6 @@ import (
 	"strings"
 )
 
-type Room struct {
-	Name  string
-	Links []string
-	Used  bool
-}
-
-type AntFarm struct {
-	Ants  int
-	Rooms map[string]*Room
-	Start string
-	End   string
-}
-
 func ParseFile(file *os.File) *AntFarm {
 	scanner := bufio.NewScanner(file)
 	rooms := make(map[string]*Room)
