@@ -149,6 +149,15 @@ func validateRoom(line string, rooms map[string]*Room) string {
 		log.Fatalf("ERROR: invalid room name: %s", roomName)
 	}
 
+	_, err := strconv.Atoi(parts[1])
+	if err != nil {
+		log.Fatalf("Error: room coordinate should be of type int")
+	}
+	_, err = strconv.Atoi(parts[2])
+	if err != nil {
+		log.Fatalf("Error: room coordinate should be of type int")
+	}
+
 	// Check for duplicate room names
 	if _, exists := rooms[roomName]; exists {
 		log.Fatalf("ERROR: duplicate room name: %s", roomName)
