@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-var isBigFarm bool
-
 func printPerformance() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
