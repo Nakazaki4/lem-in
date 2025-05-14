@@ -11,8 +11,6 @@ func printPerformance() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	fmt.Printf("Alloc = %v KiB", m.Alloc/1024)
-	fmt.Printf("\tTotalAlloc = %v KiB", m.TotalAlloc/1024)
-	fmt.Printf("\tSys = %v KiB\n", m.Sys/1024)
 }
 
 func main() {
