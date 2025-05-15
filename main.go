@@ -3,139 +3,67 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 )
-
-func printPerformance() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Printf("Alloc = %v KiB", m.Alloc/1024)
-}
 
 func main() {
 	fileName := os.Args[1]
 	file, _ := os.Open(fileName)
-	graph := ParseFile(file)
-	newApproach(graph)
+	farm := ParseFile(file)
+	planAntsJourney(farm)
 	printPerformance()
 }
 
-func newApproach(graph *AntFarm) {
+func planAntsJourney(farm *AntFarm) {
 	// Get all possible paths first
-	allPaths := make([][]string, 0)
-	for _, neighbor := range graph.Rooms[graph.Start].Links {
-		allPaths = append(allPaths, findShortestPath(graph, neighbor, graph.End))
+	initialPaths := make([][]string, 0)
+	for _, neighbor := range farm.Rooms[farm.Start].Links {
+		initialPaths = append(initialPaths, findShortestPath(farm, neighbor, farm.End))
 	}
-
-	target := 0
-
-	for range graph.Rooms[graph.End].Links {
-		target++
-	}
-
 	// This will hold all combinations of compatible paths
-	allCombinations := [][][]string{}
+	allGroups := [][][]string{}
 
 	// Try each path as a starting point
-	for _, path := range allPaths {
+	for _, path := range initialPaths {
 		if len(path) != 0 {
-
 			// Start a new combination with this path
-			combo := [][]string{path}
-			allCombinations = append(allCombinations, combo)
+			group := [][]string{path}
+			allGroups = append(allGroups, group)
 
-			newGraph := rebuildGraph(copyGraph(graph), path)
+			newFarm := rebuildGraph(copyGraph(farm), path)
 			// Find all compatible paths recursively
-			findCompatiblePathsRecursive(newGraph, &combo, &allPaths, &allCombinations)
+			findCompatiblePaths(newFarm, &group, &initialPaths, &allGroups)
 		}
 	}
 	// // Map to store evaluation metrics for each combination
 	stepTurns := make(map[int][]int)
 
-	for i, combin := range allCombinations {
-		antsPerPath := antDistribution(graph.Ants, &combin)
+	for i, group := range allGroups {
+		antsPerPath := antDistribution(farm.Ants, &group)
 
 		// Calculate the turns using the first path's length and ants
-		firstPathLength := len(combin[0])
+		firstPathLength := len(group[0])
 		firstPathAnts := antsPerPath[0]
 		// this calculates turns
-		tempT := firstPathLength - 1 + firstPathAnts
+		totalTurns := firstPathLength - 1 + firstPathAnts
 
 		totalSteps := 0
 		// this calculates steps
-		for j, path := range combin {
+		for j, path := range group {
 			totalSteps += antsPerPath[j] * len(path)
 		}
 
-		stepTurns[i] = []int{totalSteps, tempT}
+		stepTurns[i] = []int{totalSteps, totalTurns}
 	}
 
 	// Find the best combination using MinSteps
-	bestIndex := MinSteps(stepTurns)
-	bestCombo := allCombinations[bestIndex]
-	bestDistribution := antDistribution(graph.Ants, &bestCombo)
+	bestGroupIndex := MinSteps(stepTurns)
+	bestGroup := allGroups[bestGroupIndex]
+	bestDistribution := antDistribution(farm.Ants, &bestGroup)
 
-	movementSimulation(graph.End, graph.Ants, &bestDistribution, bestCombo)
+	simulateMovement(farm.End, farm.Ants, &bestDistribution, bestGroup)
 }
 
-func findShortestPath(graph *AntFarm, startNode string, endNode string) []string {
-	// Use the graph's end if not specified
-	if endNode == "" {
-		endNode = graph.End
-	}
-
-	// Check if start and end are the same
-	if startNode == endNode {
-		return []string{startNode}
-	}
-
-	// Queue for BFS
-	queue := []string{startNode}
-
-	// Keep track of visited nodes to avoid cycles
-	visited := make(map[string]bool)
-	visited[startNode] = true
-
-	// Store parent of each node to reconstruct the path
-	parent := make(map[string]string)
-
-	// BFS traversal
-	for len(queue) > 0 {
-		// Dequeue the first node
-		current := queue[0]
-		queue = queue[1:]
-
-		// Check if we've reached the end
-		if current == endNode {
-			// Reconstruct the path
-			path := []string{current}
-			for current != startNode {
-				current = parent[current]
-				path = append([]string{current}, path...)
-			}
-			return path
-		}
-
-		// Explore neighbors
-		if room, ok := graph.Rooms[current]; ok {
-			if room.Name != graph.Start {
-				for _, neighbor := range room.Links {
-					if !visited[neighbor] {
-						visited[neighbor] = true
-						parent[neighbor] = current
-						queue = append(queue, neighbor)
-					}
-				}
-			}
-		}
-	}
-
-	// No path found
-	return nil
-}
-
-// Implementation of MinSteps function
 func MinSteps(stepTurns map[int][]int) int {
 	first := true
 	minSteps, minTurns := 0, 0
@@ -155,8 +83,8 @@ func MinSteps(stepTurns map[int][]int) int {
 	return index
 }
 
-func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentGroup *[][]string, allPaths *[][]string, allCombinations *[][][]string) {
-	possiblePaths := getAllPossiblePathsBfs(modifiedGraph)
+func findCompatiblePaths(modifiedFarm *AntFarm, currentGroup *[][]string, allPaths *[][]string, allGroups *[][][]string) {
+	possiblePaths := getAllPossiblePathsBfs(modifiedFarm)
 	if len(possiblePaths) == 0 {
 		return
 	}
@@ -171,14 +99,14 @@ func findCompatiblePathsRecursive(modifiedGraph *AntFarm, currentGroup *[][]stri
 		newGroup = append(newGroup, path)
 		// we should check if the path we're about to append doesn't intersect with any paths in the previous combination
 		p := path[:len(path)-1]
-		if !isCompatibleWithComb(currentGroup, &p) || len(newGroup) > modifiedGraph.Ants || len(newGroup) <= 0 {
+		if !isCompatibleWithComb(currentGroup, &p) || len(newGroup) > modifiedFarm.Ants || len(newGroup) <= 0 {
 			continue
 		}
-		*allCombinations = append(*allCombinations, newGroup)
+		*allGroups = append(*allGroups, newGroup)
 
-		// Further modify the graph and continue recursively
-		newGraph := rebuildGraph(copyGraph(modifiedGraph), path)
-		findCompatiblePathsRecursive(newGraph, &newGroup, allPaths, allCombinations)
+		// Further modify the farm and continue recursively
+		newFarm := rebuildGraph(copyGraph(modifiedFarm), path)
+		findCompatiblePaths(newFarm, &newGroup, allPaths, allGroups)
 	}
 }
 
@@ -202,80 +130,11 @@ func isCompatibleWithComb(combination *[][]string, pathToAppend *[]string) bool 
 	return true
 }
 
-func getAllPossiblePathsBfs(graph *AntFarm) [][]string {
-	var paths [][]string
-	queue := Queue{}
-	queue.Enqueue([]string{graph.Start})
-
-	for !queue.IsEmpty() {
-		path := queue.Dequeue()
-		current := path[len(path)-1]
-		if current == graph.End {
-			paths = append(paths, path[1:])
-			continue
-		}
-
-		visited := make(map[string]bool)
-
-		for _, room := range path {
-			visited[room] = true
-		}
-
-		currentRoom, exists := graph.Rooms[current]
-		if !exists || currentRoom == nil {
-			// Skip this path if the room doesn't exist
-			continue
-		}
-
-		for _, neighbor := range graph.Rooms[current].Links {
-			if visited[neighbor] {
-				continue
-			}
-
-			visited[neighbor] = true
-
-			newPath := make([]string, len(path))
-			copy(newPath, path)
-			newPath = append(newPath, neighbor)
-
-			
-			// -- Use this for big graphs --
-			hasOverLap := false
-			newRooms := make(map[string]bool)
-			for _, room := range newPath[1:] {
-				newRooms[room] = true
-			}
-
-			for _, existingPath := range queue.elements {
-				for _, room := range existingPath {
-					if newRooms[room] {
-						hasOverLap = true
-						break
-					}
-				}
-				if hasOverLap {
-					break
-				}
-			}
-
-			if !hasOverLap {
-				queue.Enqueue(newPath)
-			}
-
-			// -- Use this for small graphs --
-			// queue.Enqueue(newPath)
-		}
-	}
-	return paths
-}
-
-func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][]string) int {
+func simulateMovement(end string, totalAnts int, antsPerPath *[]int, paths [][]string) int {
 	ants := make([]*Ant, totalAnts)
 	antID := 1
 
-	// create ants and assign them to paths (this brings how many ants are in each path)
 	for pathID, count := range *antsPerPath {
-		// This takes the number of ants in a path and gives each ant a ID and a ID of the path it belomngs too
 		for i := range count {
 			ants[antID-1] = &Ant{
 				ID:       antID,
@@ -291,7 +150,6 @@ func movementSimulation(end string, totalAnts int, antsPerPath *[]int, paths [][
 	finished := 0
 	counter := 0
 
-	// Simulation loop, runs till all the ants have finished the course
 	for finished < totalAnts {
 		counter++
 		// Track movements for this turn
@@ -379,58 +237,58 @@ func antDistribution(ants int, paths *[][]string) []int {
 	return antsPerPath
 }
 
-func rebuildGraph(graph *AntFarm, pathToRemove []string) *AntFarm {
+func rebuildGraph(farm *AntFarm, pathToRemove []string) *AntFarm {
 	if len(pathToRemove) == 1 {
-		return removeLink(graph, graph.Start, graph.End)
+		return removeLink(farm, farm.Start, farm.End)
 	}
 
 	for i := 1; i < len(pathToRemove)-1; i++ {
-		nodeToRemove := pathToRemove[i]
+		roomToRemove := pathToRemove[i]
 
-		for roomName, room := range graph.Rooms {
-			if roomName != nodeToRemove {
+		for roomName, room := range farm.Rooms {
+			if roomName != roomToRemove {
 				newLinks := []string{}
 				for _, link := range room.Links {
-					if link != nodeToRemove {
+					if link != roomToRemove {
 						newLinks = append(newLinks, link)
 					}
 				}
 				room.Links = newLinks
-				graph.Rooms[roomName] = room
+				farm.Rooms[roomName] = room
 			}
 		}
 
-		delete(graph.Rooms, nodeToRemove)
+		delete(farm.Rooms, roomToRemove)
 	}
-	return graph
+	return farm
 }
 
-func copyGraph(graph *AntFarm) *AntFarm {
-	newGraph := &AntFarm{
-		Start: graph.Start,
-		End:   graph.End,
-		Ants:  graph.Ants,
-		Rooms: make(map[string]*Room, len(graph.Rooms)),
+func copyGraph(farm *AntFarm) *AntFarm {
+	newFarm := &AntFarm{
+		Start: farm.Start,
+		End:   farm.End,
+		Ants:  farm.Ants,
+		Rooms: make(map[string]*Room, len(farm.Rooms)),
 	}
 
 	// Copy all rooms and their links
-	for name, room := range graph.Rooms {
+	for name, room := range farm.Rooms {
 		newLinks := make([]string, len(room.Links))
 		copy(newLinks, room.Links)
 
-		newGraph.Rooms[name] = &Room{
+		newFarm.Rooms[name] = &Room{
 			Name:  room.Name,
 			Links: newLinks,
 		}
 	}
 
-	return newGraph
+	return newFarm
 }
 
-func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm {
-	newGraph := copyGraph(graph)
+func removeLink(farm *AntFarm, fromNode, toNode string) *AntFarm {
+	newFarm := copyGraph(farm)
 
-	if room, exists := newGraph.Rooms[fromNode]; exists {
+	if room, exists := newFarm.Rooms[fromNode]; exists {
 		newLinks := []string{}
 		for _, link := range room.Links {
 			if link != toNode {
@@ -438,10 +296,10 @@ func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm {
 			}
 		}
 		room.Links = newLinks
-		newGraph.Rooms[fromNode] = room
+		newFarm.Rooms[fromNode] = room
 	}
 
-	if room, exists := newGraph.Rooms[toNode]; exists {
+	if room, exists := newFarm.Rooms[toNode]; exists {
 		newLinks := []string{}
 		for _, link := range room.Links {
 			if link != fromNode {
@@ -449,7 +307,7 @@ func removeLink(graph *AntFarm, fromNode, toNode string) *AntFarm {
 			}
 		}
 		room.Links = newLinks
-		newGraph.Rooms[toNode] = room
+		newFarm.Rooms[toNode] = room
 	}
-	return newGraph
+	return newFarm
 }

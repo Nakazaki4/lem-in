@@ -8,17 +8,9 @@ type Ant struct {
 	Finished bool
 }
 
-type BestSolution struct {
-	Turns        int
-	Steps        int
-	Group        [][]string
-	Distribution []int
-}
-
 type Room struct {
 	Name  string
 	Links []string
-	Used  bool
 }
 
 type AntFarm struct {
@@ -27,9 +19,3 @@ type AntFarm struct {
 	Start string
 	End   string
 }
-
-type PathNode struct {
-	Name   string
-	Parent *PathNode
-}
-
